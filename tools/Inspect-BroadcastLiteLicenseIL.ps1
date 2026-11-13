@@ -79,7 +79,7 @@ try {
 
         $candidateMethodList = New-Object 'System.Collections.Generic.List[object]'
         foreach ($method in $methods) {
-            $includeMethod = ($method.Name -match '(?i)licen|registr|trial|unlicen|form_BroadcastLite_Load|StartBroadcast|StartSchedule')
+            $includeMethod = ($method.Name -match '(?i)licen|registr|trial|unlicen|form_BroadcastLite_Load|StartBroadcast|StartSchedule|btn_Start_Click|btn_Stop_Click|timer_CallLength_Tick|timer_Inner_Tick|timer_Schedule_Tick|btn_LoginVOIPSettings_Click|RunPingTest|InitializeSoftPhone|Post')
 
             if (-not $includeMethod -and $method.HasBody) {
                 foreach ($instruction in $method.Body.Instructions) {
