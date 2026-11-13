@@ -71,7 +71,7 @@ Run the same synthetic test locally:
 
 Do not assume the included Setup.exe is a current installer. Static inspection identifies it as a compiled downloader-style setup program. It has not been launched.
 
-Do not replace the 1-byte root VoIPSDK.dll with a DLL from one of the architecture-specific folders until the expected assembly identity, version, architecture and vendor packaging instructions are confirmed. The similarly named architecture-specific SDK files have not yet been validated as a coherent, redistributable SDK package.
+Do not replace the 1-byte root VoIPSDK.dll with a DLL from one of the architecture-specific folders until the expected assembly identity, version and vendor packaging instructions are confirmed. Windows CI verified PE headers: VoIPSDK_x86 contains x86 managed/native DLLs; VoIPSDK_x64 contains an x86 managed wrapper and x64 native DLL. This is a header/architecture check only, not an assembly identity, version, runtime-loading, licence or redistribution check.
 
 ## Credentials and privacy
 
