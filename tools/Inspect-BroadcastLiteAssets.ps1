@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [string]$RepositoryRoot = (Join-Path $PSScriptRoot '..')
+    [string]$RepositoryRoot = (Join-Path $PSScriptRoot '..'),
+    [string]$OnlyManagedAssemblyPath = $null
 )
 
 Set-StrictMode -Version Latest
@@ -163,7 +164,8 @@ function Get-AssemblyMetadata {
             $references = @($assembly.GetReferencedAssemblies() | ForEach-Object { $_.FullName })
         }
         catch {
-            $references = @("Reference metadata unavailable: $($_.Exception.GetType().Name)")
+            $baseException = $_.Exception.GetBaseException()
+            $references = @("Reference metadata unavailable: $($baseException.GetType().Name): $($baseException.Message)")
         }
 
         return [pscustomobject]@{
@@ -340,6 +342,13 @@ $binaryDetailResults = foreach ($relative in $binaryPaths) {
         PublicKeyToken = $assembly.PublicKeyToken
         AssemblyReferences = $assembly.References
     }
+}
+
+if (-not [string]::IsNullOrWhiteSpace($OnlyManagedAssemblyPath)) {
+    if ($OnlyManagedAssemblyPath -notin $binaryPaths) {
+        throw 'OnlyManagedAssemblyPath must match one of the known repository SDK/executable inspection paths.'
+    }
+    $binaryPaths = @($OnlyManagedAssemblyPath)
 }
 
 $audioCandidates = @(
