@@ -127,8 +127,10 @@ try {
                     }
                     elseif ($instruction.Operand -is [string]) {
                         $literal = [string]$instruction.Operand
-                        if ($literal -match '(?i)(password|passwd|secret|activation.?key|license.?key|serial.?key|token=)') {
-                            $operandText = '<sensitive literal redacted>'
+                        if ($literal -match '(?i)(password|passwd|secret|activation.?key|license.?key|serial.?key|token=|OZSDK|DYN\d)' -or
+                            $literal.Length -ge 48 -or
+                            $literal -match '^[A-Za-z0-9+/]{32,}={0,2}$') {
+                            $operandText = '<sensitive or long literal redacted>'
                         }
                         else {
                             $operandText = '"' + ($literal -replace '[\r\n\t]', ' ') + '"'
