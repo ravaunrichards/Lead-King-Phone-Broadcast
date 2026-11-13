@@ -125,6 +125,7 @@ $sampleCount = 0
 $invalidCount = 0
 $duplicateCount = 0
 $seen = @{}
+$listOptOuts = @{}
 
 for ($lineIndex = 1; $lineIndex -lt $lines.Count; $lineIndex++) {
     $fields = ConvertFrom-TsvLine -Line $lines[$lineIndex]
@@ -154,6 +155,12 @@ for ($lineIndex = 1; $lineIndex -lt $lines.Count; $lineIndex++) {
     if ($phone -notmatch '^\d{10}$') {
         $invalidCount++
         continue
+    }
+
+    # Record OptOut before duplicate detection. A later duplicate OptOut
+    # suppresses the number even when an earlier row was otherwise eligible.
+    if ($action.Trim().Equals('OptOut', [System.StringComparison]::OrdinalIgnoreCase)) {
+        $listOptOuts[$phone] = $true
     }
 
     if ($seen.ContainsKey($phone)) {
@@ -196,7 +203,12 @@ if ([string]::IsNullOrWhiteSpace($ConsentListPath) -or [string]::IsNullOrWhiteSp
 $consent = Read-PhoneSet -Path $ConsentListPath
 $suppressed = Read-PhoneSet -Path $SuppressionListPath
 
-# Existing OptOut outcomes are always added to suppression.
+# OptOut in any row suppresses the number even if that row was a duplicate.
+foreach ($phone in $listOptOuts.Keys) {
+    $suppressed[$phone] = $true
+}
+
+# Retain OptOut suppression from every retained row as a defensive check.
 foreach ($record in $rows) {
     if ($record.Action.Trim().Equals('OptOut', [System.StringComparison]::OrdinalIgnoreCase)) {
         $suppressed[$record.Phone] = $true
