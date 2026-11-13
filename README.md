@@ -55,6 +55,18 @@ Important:
 
 The legacy application documentation specifies ten-digit phone numbers. International number handling must be verified with the original vendor/application before use.
 
+## SIP and SMTP configuration
+
+See docs/CONFIGURATION-REFERENCE.md and .env.example for the required fields and credential-handling rules. The example file contains only replacement text; it is not real provider configuration and the legacy executable has not been shown to read environment variables or .env files. Do not place actual passwords in GitHub.
+
+## Automated safe validation
+
+A Windows GitHub Actions workflow is included at .github/workflows/validate.yml. It parses the PowerShell scripts, runs synthetic call-list tests using reserved example-style test numbers, exercises the workspace initializer in WhatIf mode, and performs read-only asset inspection. It never launches BroadcastLite, Setup.exe, MicroSIP or AnyDesk and does not place calls.
+
+Run the same synthetic test locally:
+
+    powershell -NoProfile -ExecutionPolicy RemoteSigned -File .\tools\Test-CallList.ps1
+
 ## Legacy application and dependencies
 
 Do not assume the included Setup.exe is a current installer. Static inspection identifies it as a compiled downloader-style setup program. It has not been launched.
@@ -63,7 +75,7 @@ Do not replace the 1-byte root VoIPSDK.dll with a DLL from one of the architectu
 
 ## Credentials and privacy
 
-Never commit SIP passwords, SMTP passwords, customer lists, consent evidence, suppression lists, voice messages, complete call recordings, or runtime logs. Keep them in access-controlled local storage. Do not paste secrets into issues, pull requests, or source files.
+Never commit SIP passwords, SMTP passwords, customer lists, consent evidence, suppression lists, voice messages, complete call recordings, or runtime logs. Keep them in access-controlled local storage. Do not paste secrets into issues, pull requests, or source files. The .gitignore file protects common local-secret and operational-data paths, but it is not a substitute for reviewing every file before commit.
 
 The repository's configuration sample is a trial/example file, not a real provider account. No SIP provider, SMTP server, caller ID, or production credentials are configured by this project.
 
