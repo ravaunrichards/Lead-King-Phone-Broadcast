@@ -1,0 +1,206 @@
+[CmdletBinding()]
+param(
+    [string]$RepositoryRoot = (Join-Path $PSScriptRoot '..')
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+function Get-PeMetadata {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+        $reader = New-Object System.IO.BinaryReader($stream)
+        if ($stream.Length -lt 64) {
+            return [pscustomobject]@{ Path = $Path; IsPE = $false; Reason = 'File is too small for a PE header' }
+        }
+
+        $dos = $reader.ReadBytes(2)
+        if ([System.Text.Encoding]::ASCII.GetString($dos) -ne 'MZ') {
+            return [pscustomobject]@{ Path = $Path; IsPE = $false; Reason = 'Missing MZ signature' }
+        }
+
+        $stream.Position = 0x3C
+        $peOffset = $reader.ReadUInt32()
+        if ($peOffset -gt ($stream.Length - 26)) {
+            return [pscustomobject]@{ Path = $Path; IsPE = $false; Reason = 'PE header offset is outside the file' }
+        }
+
+        $stream.Position = $peOffset
+        $signature = [System.Text.Encoding]::ASCII.GetString($reader.ReadBytes(4))
+        if ($signature -ne ('PE' + [char]0 + [char]0)) {
+            return [pscustomobject]@{ Path = $Path; IsPE = $false; Reason = 'Missing PE signature' }
+        }
+
+        $machine = $reader.ReadUInt16()
+        $sectionCount = $reader.ReadUInt16()
+        $null = $reader.ReadUInt32()
+        $null = $reader.ReadUInt32()
+        $null = $reader.ReadUInt32()
+        $optionalHeaderSize = $reader.ReadUInt16()
+        $null = $reader.ReadUInt16()
+        $optionalMagic = 0
+        if ($optionalHeaderSize -ge 2) {
+            $optionalMagic = $reader.ReadUInt16()
+        }
+
+        $architecture = switch ($machine) {
+            0x014C { 'x86' }
+            0x8664 { 'x64' }
+            0xAA64 { 'ARM64' }
+            default { 'Unknown (0x{0:X4})' -f $machine }
+        }
+
+        $format = switch ($optionalMagic) {
+            0x010B { 'PE32' }
+            0x020B { 'PE32+' }
+            default { 'Unknown (0x{0:X4})' -f $optionalMagic }
+        }
+
+        return [pscustomobject]@{
+            Path = $Path
+            IsPE = $true
+            Architecture = $architecture
+            OptionalHeader = $format
+            SectionCount = $sectionCount
+            SizeBytes = $stream.Length
+        }
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
+function Get-WavMetadata {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+        $reader = New-Object System.IO.BinaryReader($stream)
+        if ($stream.Length -lt 12) {
+            return [pscustomobject]@{ Path = $Path; Valid = $false; Reason = 'File is too small for a RIFF/WAVE header' }
+        }
+
+        $riff = [System.Text.Encoding]::ASCII.GetString($reader.ReadBytes(4))
+        $riffSize = $reader.ReadUInt32()
+        $wave = [System.Text.Encoding]::ASCII.GetString($reader.ReadBytes(4))
+
+        if ($riff -ne 'RIFF' -or $wave -ne 'WAVE') {
+            return [pscustomobject]@{ Path = $Path; Valid = $false; Reason = 'Missing RIFF/WAVE signature' }
+        }
+
+        $formatCode = $null
+        $channels = $null
+        $sampleRate = $null
+        $bitsPerSample = $null
+        $byteRate = $null
+        $dataSize = $null
+
+        while ($stream.Position + 8 -le $stream.Length) {
+            $chunkId = [System.Text.Encoding]::ASCII.GetString($reader.ReadBytes(4))
+            $chunkSize = $reader.ReadUInt32()
+            $chunkStart = $stream.Position
+            $chunkEnd = $chunkStart + $chunkSize
+
+            if ($chunkEnd -gt $stream.Length) {
+                return [pscustomobject]@{ Path = $Path; Valid = $false; Reason = "Chunk $chunkId extends beyond the file" }
+            }
+
+            if ($chunkId -eq 'fmt ' -and $chunkSize -ge 16) {
+                $formatCode = $reader.ReadUInt16()
+                $channels = $reader.ReadUInt16()
+                $sampleRate = $reader.ReadUInt32()
+                $byteRate = $reader.ReadUInt32()
+                $null = $reader.ReadUInt16()
+                $bitsPerSample = $reader.ReadUInt16()
+            }
+            elseif ($chunkId -eq 'data') {
+                $dataSize = $chunkSize
+            }
+
+            $stream.Position = $chunkEnd + ($chunkSize % 2)
+        }
+
+        if ($null -eq $formatCode -or $null -eq $dataSize -or $null -eq $byteRate) {
+            return [pscustomobject]@{ Path = $Path; Valid = $false; Reason = 'Missing fmt or data chunk' }
+        }
+
+        $duration = if ($byteRate -gt 0) { [Math]::Round(($dataSize / $byteRate), 3) } else { $null }
+
+        return [pscustomobject]@{
+            Path = $Path
+            Valid = ($formatCode -eq 1 -and $riffSize + 8 -eq $stream.Length)
+            Format = if ($formatCode -eq 1) { 'PCM' } else { "Format $formatCode" }
+            Channels = $channels
+            SampleRateHz = $sampleRate
+            BitsPerSample = $bitsPerSample
+            DurationSeconds = $duration
+            DeclaredLengthMatches = ($riffSize + 8 -eq $stream.Length)
+        }
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
+$root = [System.IO.Path]::GetFullPath($RepositoryRoot)
+if (-not (Test-Path -LiteralPath $root -PathType Container)) {
+    throw "Repository root not found: $root"
+}
+
+$binaryPaths = @(
+    'BroadcastLite.exe',
+    'Setup.exe',
+    'VoIPSDK.dll',
+    'VoIPSDK_x64\Bridge_x64_x86.exe',
+    'VoIPSDK_x64\VoIPSDK_64bit.dll',
+    'VoIPSDK_x64\VoIPSDK_NativeLib_x64.dll',
+    'VoIPSDK_x64\lame_enc_64.dll',
+    'VoIPSDK_x64\vcomp100_x64.dll',
+    'VoIPSDK_x86\VoIPSDK_32bit.dll',
+    'VoIPSDK_x86\VoIPSDK_NativeLib_x86.dll',
+    'VoIPSDK_x86\lame_enc_32.dll',
+    'VoIPSDK_x86\vcomp100_x86.dll'
+)
+
+$binaryResults = foreach ($relative in $binaryPaths) {
+    $full = Join-Path $root $relative
+    if (-not (Test-Path -LiteralPath $full -PathType Leaf)) {
+        [pscustomobject]@{ Path = $relative; Exists = $false; IsPE = $false; Reason = 'Missing' }
+        continue
+    }
+
+    $item = Get-Item -LiteralPath $full
+    if ($item.Length -lt 64) {
+        [pscustomobject]@{ Path = $relative; Exists = $true; IsPE = $false; SizeBytes = $item.Length; Reason = 'Too small to contain a valid PE image' }
+        continue
+    }
+
+    $metadata = Get-PeMetadata -Path $full
+    $metadata | Add-Member -NotePropertyName Exists -NotePropertyValue $true
+    $metadata | Add-Member -NotePropertyName RelativePath -NotePropertyValue $relative
+    $metadata
+}
+
+$audioCandidates = @(
+    (Join-Path $root '3_Intro Message.wav'),
+    (Join-Path $root '4_Leave Your Message.wav')
+)
+
+$audioFolder = Join-Path $root 'Audio'
+if (Test-Path -LiteralPath $audioFolder -PathType Container) {
+    $audioCandidates += @(Get-ChildItem -LiteralPath $audioFolder -Filter '*.wav' -File -Recurse | ForEach-Object { $_.FullName })
+}
+
+$audioResults = foreach ($path in ($audioCandidates | Select-Object -Unique)) {
+    if (Test-Path -LiteralPath $path -PathType Leaf) {
+        Get-WavMetadata -Path $path
+    }
+}
+
+Write-Host 'Binary header inspection (files are read only; no program is launched):'
+$binaryResults | Format-Table -AutoSize
+Write-Host 'WAV inspection:'
+$audioResults | Format-Table -AutoSize
+Write-Warning 'This is a static header check only. It does not validate digital signatures, SDK licensing, runtime loading, or actual call quality.'

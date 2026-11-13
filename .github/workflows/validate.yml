@@ -1,0 +1,54 @@
+name: BroadcastLite Safe Validation
+
+on:
+  push:
+    branches:
+      - main
+      - implementation/**
+  pull_request:
+    paths:
+      - 'tools/**'
+      - '.github/workflows/validate.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  safe-validation:
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Parse PowerShell scripts without running the application
+        shell: powershell
+        run: |
+          $files = Get-ChildItem -LiteralPath .\tools -Filter *.ps1 -File
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error $_.ToString() }
+              throw "PowerShell parser validation failed for $($file.Name)"
+            }
+            Write-Host "PASS parser: $($file.Name)"
+          }
+
+      - name: Run synthetic call-list safety tests
+        shell: powershell
+        run: .\tools\Test-CallList.ps1
+
+      - name: Verify workspace initializer WhatIf mode
+        shell: powershell
+        run: |
+          $target = Join-Path $env:RUNNER_TEMP 'BroadcastLite-WhatIf-Only'
+          .\tools\Initialize-BroadcastLiteWorkspace.ps1 -Root $target -WhatIf
+          if (Test-Path -LiteralPath $target) {
+            throw 'WhatIf test failed: the workspace directory was created.'
+          }
+          Write-Host 'PASS: WhatIf created no directories.'
+
+      - name: Run read-only asset inspection
+        shell: powershell
+        run: .\tools\Inspect-BroadcastLiteAssets.ps1

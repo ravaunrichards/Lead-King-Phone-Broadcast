@@ -1,0 +1,30 @@
+# Secrets and local credentials
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.key
+*.pem
+secrets/
+Configuration/*.json
+Configuration/*.ini
+Configuration/*.config
+Configuration/*.env
+
+# Private customer data and operational records
+Call_Lists/Imports/
+Call_Lists/Processed/
+Call_Lists/Exports/
+Recordings/
+Logs/
+Backups/
+RuntimeData/
+local-data/
+
+# Runtime caches and temporary exports
+*.tmp
+*.temp
+*.bak
+*.log
+*.dmp
