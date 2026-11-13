@@ -360,6 +360,8 @@ $audioResults = foreach ($path in ($audioCandidates | Select-Object -Unique)) {
 
 Write-Host 'Binary header inspection (files are read only; no program is launched):'
 $binaryResults | Format-Table -AutoSize
+Write-Host 'CLR header flags and managed execution model:'
+$binaryResults | Select-Object Path, Architecture, IsManagedAssembly, CLRFlags, ManagedTarget | Format-List
 Write-Host 'Binary version, hash, signature and managed-assembly metadata (read-only; managed DLLs are reflection-only inspected):'
 $binaryDetailResults | Format-Table -AutoSize -Wrap
 Write-Host 'Authenticode signature status:'
