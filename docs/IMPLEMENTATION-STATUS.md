@@ -36,7 +36,7 @@ Added on this branch:
 - VoIPSDK_x86/VoIPSDK_32bit.dll reports the same managed assembly identity.
 - VoIPSDK_x64/VoIPSDK_64bit.dll reports the same managed assembly identity.
 - The x86 native library is PE machine type x86; the x64 native library is PE machine type x64.
-- The managed wrapper PE32 header alone does not tell whether it is AnyCPU or requires 32-bit execution; CLR flags still need inspection before deciding the appropriate wrapper/native pairing.
+- CLR-header inspection (run 43432188074) establishes BroadcastLite.exe CLR flags 0x00000003: IL-only, 32-bit required. Both managed wrappers have CLR flags 0x00000001: IL-only, AnyCPU-compatible. Therefore the 32-bit app must use the x86 native library; the x64 native library cannot be loaded in this process. The automated SDK package test now asserts this app/wrapper/native architecture pairing.
 - The x64 wrapper metadata references other assemblies, including antlr.runtime, BouncyCastle.Crypto, AForge.Imaging and log4net. These dependencies must be resolved against the exact SDK distribution; do not assume the runtime files are present just because references appear in metadata.
 - Reflection-only inspection did not yield the full x86 wrapper reference list, even under 32-bit PowerShell. Its identity and architecture checks passed, but the x86 reference chain remains incomplete.
 - Authenticode status: BroadcastLite.exe, Setup.exe and Ozeki SDK binaries report NotSigned; Microsoft vcomp100 files report Valid and are signed by Microsoft. NotSigned is a trust/verification gap, not proof of tampering. The strong-name token confirms assembly identity but does not prove a commercial SDK licence.
@@ -52,7 +52,7 @@ Added on this branch:
 
 ## Not yet completed / requires further work
 - No editable BroadcastLite project/solution/source code. The Lead King product licence gate has not been modified because no auditable source/build path exists.
-- Ozeki SDK is a separate third-party licensed component. Vendor authorization for Lead King is not a substitute for the required Ozeki entitlement for this product/version and capacity. Review the bundled EULA and original Ozeki license receipt/package terms before redistribution or activation changes.
+- Ozeki SDK is a separate third-party licensed component. Official Ozeki licensing guidance bases the standard license on simultaneous call capacity and SIP account count, allows copies of one licensed product without per-copy royalties, and requires separate activations for each developer workstation and an independent build server. Vendor authorization for Lead King is not a substitute for the Ozeki entitlement for this product/version/capacity. Review the original Ozeki receipt/package terms before redistribution or activation changes. Ozeki currently lists SDK v10.5.3; later releases require a newer framework baseline than this .NET Framework 4.5 app, so a version upgrade needs source-level migration.
 - EULA.pdf has not been reviewed in a rendered PDF viewer; do not redistribute/modify vendor or third-party binaries until reviewed.
 - SDK dependency resolution, CLR flags, loadability, native-library search paths and runtime compatibility remain unverified.
 - Setup.exe downloader endpoint/payload/current installer behavior has not been verified.
