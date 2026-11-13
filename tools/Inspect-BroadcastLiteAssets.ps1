@@ -40,8 +40,10 @@ function Get-PeMetadata {
         $null = $reader.ReadUInt32()
         $optionalHeaderSize = $reader.ReadUInt16()
         $null = $reader.ReadUInt16()
+        $optionalHeaderStart = [long]$peOffset + 24
         $optionalMagic = 0
         if ($optionalHeaderSize -ge 2) {
+            $stream.Position = $optionalHeaderStart
             $optionalMagic = $reader.ReadUInt16()
         }
 
@@ -58,12 +60,80 @@ function Get-PeMetadata {
             default { 'Unknown (0x{0:X4})' -f $optionalMagic }
         }
 
+        $isManaged = $false
+        $clrFlags = $null
+        $managedTarget = 'No CLR header'
+
+        if ($optionalMagic -eq 0x010B -or $optionalMagic -eq 0x020B) {
+            $numberOfDirectoriesOffset = if ($optionalMagic -eq 0x010B) { 92 } else { 108 }
+            $directoriesStart = if ($optionalMagic -eq 0x010B) { 96 } else { 112 }
+
+            if ($optionalHeaderSize -ge ($directoriesStart + (15 * 8))) {
+                $stream.Position = $optionalHeaderStart + $numberOfDirectoriesOffset
+                $numberOfDirectories = $reader.ReadUInt32()
+
+                if ($numberOfDirectories -gt 14) {
+                    $stream.Position = $optionalHeaderStart + $directoriesStart + (14 * 8)
+                    $cliRva = $reader.ReadUInt32()
+                    $cliSize = $reader.ReadUInt32()
+
+                    if ($cliRva -gt 0 -and $cliSize -ge 20) {
+                        $sectionHeaderStart = $optionalHeaderStart + $optionalHeaderSize
+                        $cliFileOffset = $null
+
+                        for ($sectionIndex = 0; $sectionIndex -lt $sectionCount; $sectionIndex++) {
+                            $stream.Position = $sectionHeaderStart + ($sectionIndex * 40)
+                            $null = $reader.ReadBytes(8)
+                            $virtualSize = $reader.ReadUInt32()
+                            $virtualAddress = $reader.ReadUInt32()
+                            $rawSize = $reader.ReadUInt32()
+                            $rawPointer = $reader.ReadUInt32()
+                            $null = $reader.ReadBytes(16)
+
+                            $mappedSize = [Math]::Max([long]$virtualSize, [long]$rawSize)
+                            if ([long]$cliRva -ge [long]$virtualAddress -and
+                                [long]$cliRva -lt ([long]$virtualAddress + $mappedSize)) {
+                                $cliFileOffset = [long]$rawPointer + ([long]$cliRva - [long]$virtualAddress)
+                                break
+                            }
+                        }
+
+                        if ($null -ne $cliFileOffset -and $cliFileOffset + 20 -le $stream.Length) {
+                            $stream.Position = $cliFileOffset + 16
+                            $clrFlags = $reader.ReadUInt32()
+                            $isManaged = $true
+
+                            $ilOnly = (($clrFlags -band 0x00000001) -ne 0)
+                            $requires32Bit = (($clrFlags -band 0x00000002) -ne 0)
+                            $prefers32Bit = (($clrFlags -band 0x00020000) -ne 0)
+
+                            if (-not $ilOnly) {
+                                $managedTarget = 'Mixed-mode or native CLR image'
+                            }
+                            elseif ($requires32Bit) {
+                                $managedTarget = 'IL-only, 32-bit required'
+                            }
+                            elseif ($prefers32Bit) {
+                                $managedTarget = 'IL-only, prefers 32-bit'
+                            }
+                            else {
+                                $managedTarget = 'IL-only, AnyCPU-compatible'
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         return [pscustomobject]@{
             Path = $Path
             IsPE = $true
             Architecture = $architecture
             OptionalHeader = $format
             SectionCount = $sectionCount
+            IsManagedAssembly = $isManaged
+            CLRFlags = if ($null -ne $clrFlags) { '0x{0:X8}' -f $clrFlags } else { '' }
+            ManagedTarget = $managedTarget
             SizeBytes = $stream.Length
         }
     }
