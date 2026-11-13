@@ -40,9 +40,9 @@ Run the read-only package identity check:
 
     powershell -NoProfile -ExecutionPolicy RemoteSigned -File .\\tools\\Test-VoIPSDKPackage.ps1
 
-Windows CI confirms that BroadcastLite.exe, VoIPSDK_x86/VoIPSDK_32bit.dll and VoIPSDK_x64/VoIPSDK_64bit.dll share the VoIPSDK assembly name, version 10.1.1.457 and public-key token 4812fb35129b8487. The native x86 and x64 DLL headers match their named architectures. SDK metadata also identifies third-party assembly references that must be resolved against the exact licensed SDK distribution. See docs/VOIP-SDK-LICENSING.md.
+Windows CI confirms that BroadcastLite.exe, VoIPSDK_x86/VoIPSDK_32bit.dll and VoIPSDK_x64/VoIPSDK_64bit.dll share the VoIPSDK assembly name, version 10.1.1.457 and public-key token 4812fb35129b8487. The native x86 and x64 DLL headers match their named architectures. SDK metadata also identifies third-party assembly references that must be resolved against the exact licensed SDK distribution. See docs/VOIP-SDK-LICENSING.md. The currently published Ozeki SDK is newer than the bundled 10.1.1.457 package; do not replace it without a source-level migration because later releases have different .NET Framework requirements.
 
-The managed wrapper PE32 header is not sufficient to determine whether an assembly is AnyCPU or requires 32-bit execution; that CLR-header check and runtime probing are still outstanding. Authenticode reports the Ozeki binaries as NotSigned. A strong-name public-key token is an assembly identity, not proof of the vendor's commercial licence.
+CLR-header inspection confirms BroadcastLite.exe is IL-only but 32-bit-required (flags 0x00000003). Both managed VoIPSDK wrappers are IL-only AnyCPU-compatible (flags 0x00000001). The application therefore must use the x86 native SDK library; the x64 native library cannot be loaded into its 32-bit process. This is a static architecture pairing, not a runtime load test. Authenticode reports the Ozeki binaries as NotSigned. A strong-name public-key token is an assembly identity, not proof of the vendor's commercial licence.
 
 Do not copy an SDK DLL into the root or alter the root placeholder until the vendor package layout, dependencies, licensing and runtime resolution have been verified.
 
