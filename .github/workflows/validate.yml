@@ -52,3 +52,40 @@ jobs:
       - name: Run read-only asset inspection
         shell: powershell
         run: .\tools\Inspect-BroadcastLiteAssets.ps1
+
+      - name: Verify Ozeki SDK assembly identity and native architecture
+        shell: powershell
+        run: .\tools\Test-VoIPSDKPackage.ps1
+
+      - name: Inspect SDK managed references in 32-bit PowerShell
+        shell: powershell
+        run: |
+          $x86PowerShell = Join-Path $env:WINDIR 'SysWOW64\WindowsPowerShell\v1.0\powershell.exe'
+          if (-not (Test-Path -LiteralPath $x86PowerShell)) {
+            throw '32-bit Windows PowerShell is not available on this runner.'
+          }
+          & $x86PowerShell -NoProfile -ExecutionPolicy Bypass -File .\tools\Inspect-BroadcastLiteAssets.ps1 -RepositoryRoot . -OnlyManagedAssemblyPath 'VoIPSDK_x86\VoIPSDK_32bit.dll'
+          if ($LASTEXITCODE -ne 0) {
+            throw '32-bit SDK metadata inspection failed.'
+          }
+
+      - name: Inspect Ozeki managed references with ILDasm when installed
+        shell: powershell
+        run: |
+          $ildasm = Get-Command ildasm.exe -ErrorAction SilentlyContinue
+          if ($null -eq $ildasm) {
+            Write-Warning 'ILDasm is not installed on this runner; the x86 managed reference list remains unverified.'
+            exit 0
+          }
+
+          $tempDir = Join-Path $env:RUNNER_TEMP 'BroadcastLite-ILDasm'
+          New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+          foreach ($relative in @('VoIPSDK_x86\VoIPSDK_32bit.dll', 'VoIPSDK_x64\VoIPSDK_64bit.dll')) {
+            $output = Join-Path $tempDir ((Split-Path -Leaf $relative) + '.il')
+            & $ildasm.Source /text /nobar ("/out=" + $output) (Join-Path $PWD $relative)
+            if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $output -PathType Leaf)) {
+              throw "ILDasm metadata inspection failed for $relative."
+            }
+            Write-Host "Managed assembly references for $relative"
+            Select-String -LiteralPath $output -Pattern '^\s*\.assembly extern' | ForEach-Object { Write-Host $_.Line.Trim() }
+          }
