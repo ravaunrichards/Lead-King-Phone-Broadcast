@@ -31,7 +31,8 @@ try {
         throw 'Pinned Mono.Cecil package did not contain a supported assembly.'
     }
 
-    Add-Type -Path $cecilPath
+    $cecilBytes = [System.IO.File]::ReadAllBytes($cecilPath)
+    $null = [System.Reflection.Assembly]::Load($cecilBytes)
 
     $root = [System.IO.Path]::GetFullPath($RepositoryRoot)
     $applicationPath = Join-Path $root 'BroadcastLite.exe'
@@ -76,9 +77,32 @@ try {
             }
         }
 
-        $candidateMethods = @($methods | Where-Object {
-            $_.Name -match '(?i)licen|registr|trial|unlicen|form_BroadcastLite_Load|StartBroadcast|StartSchedule'
-        })
+        $candidateMethodList = New-Object 'System.Collections.Generic.List[object]'
+        foreach ($method in $methods) {
+            $includeMethod = ($method.Name -match '(?i)licen|registr|trial|unlicen|form_BroadcastLite_Load|StartBroadcast|StartSchedule')
+
+            if (-not $includeMethod -and $method.HasBody) {
+                foreach ($instruction in $method.Body.Instructions) {
+                    if ($instruction.Operand -is [Mono.Cecil.FieldReference] -and
+                        $instruction.Operand.Name -match '(?i)gbLicensed|giTrialVersionDialCount|licen|registr|trial|unlicen') {
+                        $includeMethod = $true
+                        break
+                    }
+
+                    if ($instruction.Operand -is [Mono.Cecil.MethodReference] -and
+                        $instruction.Operand.Name -match '(?i)SetLicense|GetLicense|Register|Unlicense|License|Trial|StartBroadcast|Broadcast') {
+                        $includeMethod = $true
+                        break
+                    }
+                }
+            }
+
+            if ($includeMethod) {
+                $candidateMethodList.Add($method)
+            }
+        }
+
+        $candidateMethods = $candidateMethodList.ToArray()
 
         Write-Host ("Candidate methods: {0}" -f $candidateMethods.Count)
         foreach ($method in $candidateMethods) {
@@ -147,6 +171,11 @@ try {
 }
 finally {
     if (Test-Path -LiteralPath $tempRoot) {
-        Remove-Item -LiteralPath $tempRoot -Recurse -Force
+        try {
+            Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction Stop
+        }
+        catch {
+            Write-Warning "Temporary Cecil inspection files could not be removed by this process: $($_.Exception.GetType().Name). The runner workspace is ephemeral."
+        }
     }
 }
