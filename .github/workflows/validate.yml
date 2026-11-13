@@ -56,3 +56,15 @@ jobs:
       - name: Verify Ozeki SDK assembly identity and native architecture
         shell: powershell
         run: .\tools\Test-VoIPSDKPackage.ps1
+
+      - name: Inspect SDK managed references in 32-bit PowerShell
+        shell: powershell
+        run: |
+          $x86PowerShell = Join-Path $env:WINDIR 'SysWOW64\WindowsPowerShell\v1.0\powershell.exe'
+          if (-not (Test-Path -LiteralPath $x86PowerShell)) {
+            throw '32-bit Windows PowerShell is not available on this runner.'
+          }
+          & $x86PowerShell -NoProfile -ExecutionPolicy Bypass -File .\tools\Inspect-BroadcastLiteAssets.ps1 -RepositoryRoot .
+          if ($LASTEXITCODE -ne 0) {
+            throw '32-bit SDK metadata inspection failed.'
+          }
