@@ -22,7 +22,7 @@
 
 Branch: implementation/sdk-metadata-audit  
 Latest tested commit: a1b212d2a53f615a437fe3afc1520056c379270f  
-Windows CI: passed - https://github.com/ravaunrichards/Lead-King-Phone-Broadcast/actions/runs/43430735159
+Windows CI: passed on the CLR-aware package test and the latest inspection changes - https://github.com/ravaunrichards/Lead-King-Phone-Broadcast/actions/runs/43433522783
 
 Added on this branch:
 - Extended static inspector for SHA-256, version metadata, Authenticode signer/status and .NET assembly identity/reference details.
@@ -36,9 +36,9 @@ Added on this branch:
 - VoIPSDK_x86/VoIPSDK_32bit.dll reports the same managed assembly identity.
 - VoIPSDK_x64/VoIPSDK_64bit.dll reports the same managed assembly identity.
 - The x86 native library is PE machine type x86; the x64 native library is PE machine type x64.
-- CLR-header inspection (run 43432188074) establishes BroadcastLite.exe CLR flags 0x00000003: IL-only, 32-bit required. Both managed wrappers have CLR flags 0x00000001: IL-only, AnyCPU-compatible. Therefore the 32-bit app must use the x86 native library; the x64 native library cannot be loaded in this process. The automated SDK package test now asserts this app/wrapper/native architecture pairing.
+- CLR-header inspection establishes BroadcastLite.exe CLR flags 0x00000003: IL-only, 32-bit required. Both managed wrappers have CLR flags 0x00000001: IL-only, AnyCPU-compatible. Therefore the 32-bit app must use the x86 native library; the x64 native library cannot be loaded in this process. The automated SDK package test now asserts this app/wrapper/native architecture pairing.
 - The x64 wrapper metadata references other assemblies, including antlr.runtime, BouncyCastle.Crypto, AForge.Imaging and log4net. These dependencies must be resolved against the exact SDK distribution; do not assume the runtime files are present just because references appear in metadata.
-- Reflection-only inspection did not yield the full x86 wrapper reference list, even under 32-bit PowerShell. Its identity and architecture checks passed, but the x86 reference chain remains incomplete.
+- Reflection-only inspection of the x86 wrapper hit a .NET assembly-location collision in the PowerShell AppDomain. An isolated x86 process reproduced the collision. The optional ILDasm fallback was not installed on the GitHub runner. The wrapper identity and architecture checks passed, but the full x86 reference chain remains unresolved.
 - Authenticode status: BroadcastLite.exe, Setup.exe and Ozeki SDK binaries report NotSigned; Microsoft vcomp100 files report Valid and are signed by Microsoft. NotSigned is a trust/verification gap, not proof of tampering. The strong-name token confirms assembly identity but does not prove a commercial SDK licence.
 - Root VoIPSDK.dll is a one-byte Git blob and is not a valid PE/managed DLL. It must not be replaced until packaging/runtime verification is complete.
 
