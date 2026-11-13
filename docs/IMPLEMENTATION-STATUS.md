@@ -10,7 +10,7 @@
 - Added a private local workspace initializer with separate audio, recording, call-list, configuration, log and backup folders. It refuses to create runtime storage inside the repository and preserves existing folders/files.
 - Added static PE/WAV inspection. It reads headers and metadata only; it does not execute EXEs or load DLLs.
 - Added a call-list preflight/preparation tool. It recognizes the documented 12-column and 15-column headers, handles the bundled sample's surplus trailing tab, maps the 12-column form to the 15-column schema, validates ten-digit numbers, excludes invalid/duplicate values, requires both explicit consent and suppression lists before generating output, and treats prior OptOut outcomes as suppression. Existing files and input data are never overwritten.
-- Added synthetic call-list tests covering approved, suppressed, no-consent, prior-OptOut and duplicate rows, plus unchanged-input and 15-column assertions.
+- Added synthetic call-list tests covering both 12-column and 15-column layouts, surplus trailing tabs, approved/suppressed/no-consent/invalid/duplicate/prior-OptOut rows, a later duplicate OptOut suppressing an earlier row, rejection of TEST CO sample entries, overwrite protection, unchanged input hashes and 15-column output padding.
 - Added a Windows GitHub Actions workflow to parse all PowerShell scripts, run synthetic tests, test workspace WhatIf behavior, and inspect assets without launching the legacy applications.
 - Added a new README, SIP/SMTP configuration reference, credential-free .env.example and .gitignore protections.
 - Original vendor ReadMe.txt, sample data, audio, executables, SDK files and icon are preserved. All changes are on a separate feature branch.
@@ -40,6 +40,7 @@
 
 ## Test status
 
+- Windows CI passed on the current hardening branch commit after the parser correction. It validates all PowerShell scripts, runs the expanded 12/15-column regression suite, checks workspace initializer WhatIf safety and inspects all available binaries/WAV files. Run: https://github.com/ravaunrichards/Lead-King-Phone-Broadcast/actions/runs/43429202462
 - Completed statically: repository tree inventory; PE header and embedded-string inspection for primary executables; RIFF/WAV metadata and chunk-boundary inspection; call-list header and row-width inspection; committed-file SHA and branch checks.
 - Automated validation passed on Windows GitHub Actions at code-bearing commit 768834b0a6c868db21b70b06bacedbb5350f5dd7 and again on subsequent branch commits. Run 43426722745 completed successfully: all four PowerShell parser checks passed; the synthetic test retained one consent-approved row and excluded the suppressed, no-consent, prior-OptOut and duplicate entries; the input SHA256 remained unchanged; the initializer WhatIf check created no directories; and the asset inspector verified the EXE/DLL architecture headers and both WAV metadata records. Run: https://github.com/ravaunrichards/Lead-King-Phone-Broadcast/actions/runs/43426722745
 - The PowerShell scripts were executed on the Windows CI runner. The local container does not have PowerShell installed, so no local PowerShell run was possible.
