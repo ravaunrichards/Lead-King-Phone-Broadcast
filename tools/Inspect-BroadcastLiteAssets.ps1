@@ -292,6 +292,17 @@ Write-Host 'Binary header inspection (files are read only; no program is launche
 $binaryResults | Format-Table -AutoSize
 Write-Host 'Binary version, hash, signature and managed-assembly metadata (read-only; managed DLLs are reflection-only inspected):'
 $binaryDetailResults | Format-Table -AutoSize -Wrap
+Write-Host 'Authenticode signature status:'
+$binaryDetailResults | Select-Object Path, SignatureStatus, Signer | Format-List
+Write-Host 'Managed assembly identities and referenced assemblies:'
+foreach ($managed in ($binaryDetailResults | Where-Object { $_.IsManagedAssembly })) {
+    Write-Host ("File: " + $managed.Path)
+    Write-Host ("Assembly: " + $managed.AssemblyName)
+    Write-Host ("Assembly version: " + $managed.AssemblyVersion)
+    Write-Host ("Culture: " + $managed.Culture)
+    Write-Host ("Public key token: " + $managed.PublicKeyToken)
+    Write-Host ("References: " + $managed.AssemblyReferences)
+}
 Write-Host 'WAV inspection:'
 $audioResults | Format-Table -AutoSize
 Write-Warning 'This is static metadata inspection only. A valid signature or managed assembly identity does not establish SDK licensing, runtime compatibility, successful loading, or actual call quality.'
