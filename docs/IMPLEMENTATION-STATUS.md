@@ -1,65 +1,73 @@
 # Lead King Phone Broadcast - implementation checkpoint
 
 **Repository:** ravaunrichards/Lead-King-Phone-Broadcast  
-**Working branch:** implementation/safe-setup-and-audit-tools  
-**Base branch:** main  
-**Scope:** safe repository-side implementation; original binaries and sample files retained
+**Default branch:** main  
+**Current work branch:** implementation/sdk-metadata-audit  
+**Safety:** original BroadcastLite/Setup/SDK executables and sample assets have not been replaced, moved or deleted
 
-## Implemented in this branch
+## Merged into main
 
-- Added a private local workspace initializer with separate audio, recording, call-list, configuration, log and backup folders. It refuses to create runtime storage inside the repository and preserves existing folders/files.
-- Added static PE/WAV inspection. It reads headers and metadata only; it does not execute EXEs or load DLLs.
-- Added a call-list preflight/preparation tool. It recognizes the documented 12-column and 15-column headers, handles the bundled sample's surplus trailing tab, maps the 12-column form to the 15-column schema, validates ten-digit numbers, excludes invalid/duplicate values, requires both explicit consent and suppression lists before generating output, and treats prior OptOut outcomes as suppression. Existing files and input data are never overwritten.
-- Added synthetic call-list tests covering both 12-column and 15-column layouts, surplus trailing tabs, approved/suppressed/no-consent/invalid/duplicate/prior-OptOut rows, a later duplicate OptOut suppressing an earlier row, rejection of TEST CO sample entries, overwrite protection, unchanged input hashes and 15-column output padding.
-- Added a Windows GitHub Actions workflow to parse all PowerShell scripts, run synthetic tests, test workspace WhatIf behavior, and inspect assets without launching the legacy applications.
-- Added a new README, SIP/SMTP configuration reference, credential-free .env.example and .gitignore protections.
-- Original vendor ReadMe.txt, sample data, audio, executables, SDK files and icon are preserved. All changes are on a separate feature branch.
+### PR #1 - safe repository setup and validation tooling
+- Merged at commit e4b42fa947fb40ef70b7120e208a0f60a42e3627.
+- Added private local workspace initializer; static binary/WAV inspector; call-list preparation; synthetic tests; README; SIP/SMTP templates; .gitignore; Windows CI.
+- Windows Actions passed on main: https://github.com/ravaunrichards/Lead-King-Phone-Broadcast/actions/runs/43428464482.
 
-## Confirmed repository facts
+### PR #2 - call-list and opt-out hardening
+- Merged at commit c7790dc470f2bc08e686396cfe1bf9a88b662b24.
+- Added tests for both 12-column and 15-column input, trailing tabs, empty padding columns, invalid/duplicate/no-consent/suppressed rows, sample TEST CO refusal, output overwrite protection, unchanged input hashes and order-independent OptOut suppression.
+- A later duplicate OptOut now suppresses an earlier row for the same phone number.
+- Windows CI passed before merge: https://github.com/ravaunrichards/Lead-King-Phone-Broadcast/actions/runs/43429447581. Main CI after merge: https://github.com/ravaunrichards/Lead-King-Phone-Broadcast/actions/runs/43429643664.
 
-- The repository is public and its default branch is main.
-- The inventory contains BroadcastLite.exe, Setup.exe, 1_VOIP_Settings.txt, 2_Call_List.txt, two sample WAV files, CallListFormat.avi, MicroSIP-3.20.5.exe, AnyDesk.exe, VoIPSDK.dll, VoIPSDK_x64, VoIPSDK_x86, audacity-win-2.0.6.exe, king-icon.ico, ReadMe.txt and EULA.pdf.
-- BroadcastLite.exe is a 586,752-byte PE32 / x86 Windows GUI executable. Static strings identify .NET Framework 4.5 metadata, Ozeki.VoIP.SDK references, SIP credential/registration fields, SMTP controls, scheduling, message playback/recording, DTMF/transfer/opt-out and product-licence workflow strings.
-- Setup.exe is a 589,312-byte PE32 / x86 Windows GUI executable. Static strings describe it as a Lead King Phone Broadcast downloader/installer and show .NET Framework 4.0 Client profile metadata. It was not executed.
-- The root VoIPSDK.dll is one byte and does not contain a PE header. It is not a usable Windows DLL.
-- Windows CI read the repository checkout and verified PE headers for all SDK-folder files: VoIPSDK_x86/VoIPSDK_32bit.dll is x86 PE32; VoIPSDK_x86/VoIPSDK_NativeLib_x86.dll is x86 PE32; VoIPSDK_x64/VoIPSDK_64bit.dll is x86 PE32; VoIPSDK_x64/VoIPSDK_NativeLib_x64.dll is x64 PE32+; LAME and vcomp100 helpers match their named architectures; Bridge_x64_x86.exe is x86 in both trees. The x64 folder's managed wrapper being x86 alongside an x64 native library needs vendor architecture/package documentation before runtime use. PE headers do not verify assembly identity, version, digital signature, dependencies, licence, or successful loading.
-- The 2_Call_List.txt header has 12 columns. Its data rows contain one surplus trailing empty field. ReadMe.txt documents 15 columns, adding Undefined1, Undefined2 and Undefined3. Actual BroadcastLite import behavior is still unverified.
-- Both sample WAVs have consistent RIFF sizes and PCM mono 8,000 Hz audio, but 16 bits per sample, not the 32 bits claimed in ReadMe.txt. Durations are approximately 15.025 seconds and 2.656 seconds.
-- 1_VOIP_Settings.txt contains “Unlicensed 5 Call Trial Version”, placeholder “Unlicensed” fields, a sample date and example paths, not usable SIP-provider credentials.
-- 2_Call_List.txt contains TEST CO rows and is sample data, not production customer records.
+## Current SDK audit branch
 
-## Not completed / blocked
+Branch: implementation/sdk-metadata-audit  
+Latest tested commit: a1b212d2a53f615a437fe3afc1520056c379270f  
+Windows CI: passed - https://github.com/ravaunrichards/Lead-King-Phone-Broadcast/actions/runs/43430735159
 
-- No source project, solution, project files or editable BroadcastLite source was found.
-- Licence behavior has not been changed. Vendor authorization is noted, but the source project or a verifiable vendor build path is not in the repository. No binary patching or licence circumvention has been performed.
-- No current installer has been created. Setup.exe's downloader behavior, remote endpoint, payload and licensing conditions have not been validated.
-- SIP registration, test calls, call transfer, DTMF, voicemail recording, SMTP delivery, scheduling, retries or the legacy application's import behavior have not been tested.
-- EULA.pdf has not been reviewed; its licensing and redistribution terms must be verified before redistributing modified binaries or SDK components.
-- No production SIP or SMTP credentials, caller ID, consent evidence or customer list have been supplied.
-- The .env.example file documents field names only. BroadcastLite has not been demonstrated to consume it.
+Added on this branch:
+- Extended static inspector for SHA-256, version metadata, Authenticode signer/status and .NET assembly identity/reference details.
+- tools/Test-VoIPSDKPackage.ps1 compares the app's referenced VoIPSDK assembly identity to both managed wrapper DLLs and checks native x86/x64 PE machine types.
+- Windows CI includes the identity/architecture check plus a 32-bit PowerShell metadata-inspection pass.
+- docs/VOIP-SDK-LICENSING.md documents the separate third-party SDK entitlement and compatibility requirements.
 
-## Test status
+### Confirmed static SDK results
+- BroadcastLite.exe is a PE32/x86 .NET assembly with product assembly version 1.0.0.22.
+- Its assembly manifest references VoIPSDK, version 10.1.1.457, culture neutral, public-key token 4812fb35129b8487.
+- VoIPSDK_x86/VoIPSDK_32bit.dll reports the same managed assembly identity.
+- VoIPSDK_x64/VoIPSDK_64bit.dll reports the same managed assembly identity.
+- The x86 native library is PE machine type x86; the x64 native library is PE machine type x64.
+- The managed wrapper PE32 header alone does not tell whether it is AnyCPU or requires 32-bit execution; CLR flags still need inspection before deciding the appropriate wrapper/native pairing.
+- The x64 wrapper metadata references other assemblies, including antlr.runtime, BouncyCastle.Crypto, AForge.Imaging and log4net. These dependencies must be resolved against the exact SDK distribution; do not assume the runtime files are present just because references appear in metadata.
+- Reflection-only inspection did not yield the full x86 wrapper reference list, even under 32-bit PowerShell. Its identity and architecture checks passed, but the x86 reference chain remains incomplete.
+- Authenticode status: BroadcastLite.exe, Setup.exe and Ozeki SDK binaries report NotSigned; Microsoft vcomp100 files report Valid and are signed by Microsoft. NotSigned is a trust/verification gap, not proof of tampering. The strong-name token confirms assembly identity but does not prove a commercial SDK licence.
+- Root VoIPSDK.dll is a one-byte Git blob and is not a valid PE/managed DLL. It must not be replaced until packaging/runtime verification is complete.
 
-- Windows CI passed on the current hardening branch commit after the parser correction. It validates all PowerShell scripts, runs the expanded 12/15-column regression suite, checks workspace initializer WhatIf safety and inspects all available binaries/WAV files. Run: https://github.com/ravaunrichards/Lead-King-Phone-Broadcast/actions/runs/43429202462
-- Completed statically: repository tree inventory; PE header and embedded-string inspection for primary executables; RIFF/WAV metadata and chunk-boundary inspection; call-list header and row-width inspection; committed-file SHA and branch checks.
-- Automated validation passed on Windows GitHub Actions at code-bearing commit 768834b0a6c868db21b70b06bacedbb5350f5dd7 and again on subsequent branch commits. Run 43426722745 completed successfully: all four PowerShell parser checks passed; the synthetic test retained one consent-approved row and excluded the suppressed, no-consent, prior-OptOut and duplicate entries; the input SHA256 remained unchanged; the initializer WhatIf check created no directories; and the asset inspector verified the EXE/DLL architecture headers and both WAV metadata records. Run: https://github.com/ravaunrichards/Lead-King-Phone-Broadcast/actions/runs/43426722745
-- The PowerShell scripts were executed on the Windows CI runner. The local container does not have PowerShell installed, so no local PowerShell run was possible.
-- Not tested: live telephony, email delivery, application GUI, installation, runtime SDK loading, call flow, recordings, backup/restore and licence behavior.
+## Confirmed legacy repository facts
+- ReadMe.txt describes an old downloader installer Setup.exe; it was not run.
+- 1_VOIP_Settings.txt contains sample/unlicensed placeholders and example paths, not real SIP credentials.
+- 2_Call_List.txt contains a 12-column header and sample TEST CO contacts; it is not production data.
+- The README claims 15 columns; the three extra fields are Undefined1, Undefined2 and Undefined3.
+- Both bundled WAV files are valid RIFF PCM mono 8 kHz, 16-bit, not 32-bit as claimed in ReadMe.txt. Durations are approximately 15.025 seconds and 2.656 seconds.
+- The app source and a build solution have not been found in this repository.
 
-## Production safety rules
+## Not yet completed / requires further work
+- No editable BroadcastLite project/solution/source code. The Lead King product licence gate has not been modified because no auditable source/build path exists.
+- Ozeki SDK is a separate third-party licensed component. Vendor authorization for Lead King is not a substitute for the required Ozeki entitlement for this product/version and capacity. Review the bundled EULA and original Ozeki license receipt/package terms before redistribution or activation changes.
+- EULA.pdf has not been reviewed in a rendered PDF viewer; do not redistribute/modify vendor or third-party binaries until reviewed.
+- SDK dependency resolution, CLR flags, loadability, native-library search paths and runtime compatibility remain unverified.
+- Setup.exe downloader endpoint/payload/current installer behavior has not been verified.
+- SIP registration, calls, transfer, DTMF, call outcomes, message recording and real call flow have not been tested.
+- SMTP authentication and email delivery have not been tested.
+- No real provider accounts, caller ID, production list, consent evidence or live SMTP settings have been supplied through secure configuration.
+- No real broadcasts were placed; no customer data has been processed.
+- No full runtime backup/restore test has been run.
 
-- Keep runtime state outside the Git repository.
-- Never store real SIP/SMTP secrets, customer data, consent evidence, recordings or logs in Git.
-- Use verified permission-based recipient sources and maintain a current suppression file.
-- Test only with controlled, authorized endpoints. Never call the sample TEST CO records.
-- Preserve opt-outs across every future import, retry and campaign.
-- Do not enable outbound broadcasting until the app, carrier, import format, call flow and compliance controls are verified.
+## Safety rules retained
+- Keep logs, customer lists, secrets and all recordings outside the Git repository.
+- Never use TEST CO sample rows as production call targets.
+- Keep consent and suppression lists current. Every OptOut suppresses that phone number regardless of duplicate-row order.
+- Do not initiate campaigns until consent, calling-hour, caller-ID, opt-out and recording-notice requirements are verified.
+- Never log SIP/SMTP passwords or SDK license keys.
 
-## Review status
-
-- A draft pull request was opened: https://github.com/ravaunrichards/Lead-King-Phone-Broadcast/pull/1
-- The draft PR targets main. It has not been merged. No changes have been made to main.
-
-## Next technical dependency
-
-Provide the original editable BroadcastLite source project and vendor build instructions, or a vendor-signed supported build that includes the requested changes. Also provide the full Ozeki SDK package/version/license documentation and a real provider test account through a protected method before any SIP/SMTP verification.
+## Next milestone
+Obtain the original editable BroadcastLite source/build project and the exact licensed Ozeki SDK package/documentation for version 10.1.1.457. Then verify CLR flags and dependency loading in a controlled Windows VM before making any application binary or SDK placement changes. A real provider test account and SMTP test account must be supplied through secure credential storage before live service tests.
