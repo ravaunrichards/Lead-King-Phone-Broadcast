@@ -72,6 +72,51 @@ function Get-PeMetadata {
     }
 }
 
+function Get-AssemblyMetadata {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    try {
+        $name = [System.Reflection.AssemblyName]::GetAssemblyName($Path)
+        $tokenBytes = $name.GetPublicKeyToken()
+        $token = if ($null -eq $tokenBytes -or $tokenBytes.Length -eq 0) {
+            'none'
+        }
+        else {
+            ([System.BitConverter]::ToString($tokenBytes)).Replace('-', '').ToLowerInvariant()
+        }
+
+        $references = @()
+        try {
+            # ReflectionOnlyLoadFrom reads managed metadata and references only.
+            # It does not invoke the assembly entry point or execute its code.
+            $assembly = [System.Reflection.Assembly]::ReflectionOnlyLoadFrom($Path)
+            $references = @($assembly.GetReferencedAssemblies() | ForEach-Object { $_.FullName })
+        }
+        catch {
+            $references = @("Reference metadata unavailable: $($_.Exception.GetType().Name)")
+        }
+
+        return [pscustomobject]@{
+            IsManagedAssembly = $true
+            AssemblyName = $name.Name
+            AssemblyVersion = [string]$name.Version
+            Culture = if ([string]::IsNullOrWhiteSpace($name.CultureName)) { 'neutral' } else { $name.CultureName }
+            PublicKeyToken = $token
+            References = ($references -join '; ')
+        }
+    }
+    catch {
+        return [pscustomobject]@{
+            IsManagedAssembly = $false
+            AssemblyName = ''
+            AssemblyVersion = ''
+            Culture = ''
+            PublicKeyToken = ''
+            References = ''
+        }
+    }
+}
+
 function Get-WavMetadata {
     param([Parameter(Mandatory = $true)][string]$Path)
 
@@ -183,6 +228,50 @@ $binaryResults = foreach ($relative in $binaryPaths) {
     $metadata
 }
 
+$binaryDetailResults = foreach ($relative in $binaryPaths) {
+    $full = Join-Path $root $relative
+    if (-not (Test-Path -LiteralPath $full -PathType Leaf)) {
+        continue
+    }
+
+    $item = Get-Item -LiteralPath $full
+    $versionInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($full)
+    $signatureStatus = 'NotChecked'
+    $signer = ''
+
+    if ($item.Length -ge 64) {
+        try {
+            $signature = Get-AuthenticodeSignature -FilePath $full
+            $signatureStatus = [string]$signature.Status
+            if ($null -ne $signature.SignerCertificate) {
+                $signer = $signature.SignerCertificate.Subject
+            }
+        }
+        catch {
+            $signatureStatus = "InspectionError:$($_.Exception.GetType().Name)"
+        }
+    }
+
+    $assembly = Get-AssemblyMetadata -Path $full
+    $hash = (Get-FileHash -LiteralPath $full -Algorithm SHA256).Hash
+
+    [pscustomobject]@{
+        Path = $relative
+        SizeBytes = $item.Length
+        SHA256 = $hash
+        FileVersion = $versionInfo.FileVersion
+        ProductVersion = $versionInfo.ProductVersion
+        SignatureStatus = $signatureStatus
+        Signer = $signer
+        IsManagedAssembly = $assembly.IsManagedAssembly
+        AssemblyName = $assembly.AssemblyName
+        AssemblyVersion = $assembly.AssemblyVersion
+        Culture = $assembly.Culture
+        PublicKeyToken = $assembly.PublicKeyToken
+        AssemblyReferences = $assembly.References
+    }
+}
+
 $audioCandidates = @(
     (Join-Path $root '3_Intro Message.wav'),
     (Join-Path $root '4_Leave Your Message.wav')
@@ -201,6 +290,8 @@ $audioResults = foreach ($path in ($audioCandidates | Select-Object -Unique)) {
 
 Write-Host 'Binary header inspection (files are read only; no program is launched):'
 $binaryResults | Format-Table -AutoSize
+Write-Host 'Binary version, hash, signature and managed-assembly metadata (read-only; managed DLLs are reflection-only inspected):'
+$binaryDetailResults | Format-Table -AutoSize -Wrap
 Write-Host 'WAV inspection:'
 $audioResults | Format-Table -AutoSize
-Write-Warning 'This is a static header check only. It does not validate digital signatures, SDK licensing, runtime loading, or actual call quality.'
+Write-Warning 'This is static metadata inspection only. A valid signature or managed assembly identity does not establish SDK licensing, runtime compatibility, successful loading, or actual call quality.'
