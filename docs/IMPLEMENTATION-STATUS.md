@@ -41,8 +41,8 @@
 ## Test status
 
 - Completed statically: repository tree inventory; PE header and embedded-string inspection for primary executables; RIFF/WAV metadata and chunk-boundary inspection; call-list header and row-width inspection; committed-file SHA and branch checks.
-- Automated validation is configured on a Windows GitHub Actions runner. Its first run was observed in progress at commit 768834b0a6c868db21b70b06bacedbb5350f5dd7. The final workflow conclusion must be checked before marking script tests as passed.
-- Local container does not have PowerShell installed, so the PowerShell scripts have not been locally executed or parsed here.
+- Automated validation passed on Windows GitHub Actions at code-bearing commit 768834b0a6c868db21b70b06bacedbb5350f5dd7 and again on the latest documentation update at commit 842f9adf90be1eb3cfdf3c029276fbe4962388c5. Both runs completed successfully: PowerShell parser validation, synthetic call-list tests, workspace initializer WhatIf behavior and static asset inspection all passed. Latest run: https://github.com/ravaunrichards/Lead-King-Phone-Broadcast/actions/runs/43426722745
+- The PowerShell scripts were executed on the Windows CI runner. The local container does not have PowerShell installed, so no local PowerShell run was possible.
 - Not tested: live telephony, email delivery, application GUI, installation, runtime SDK loading, call flow, recordings, backup/restore and licence behavior.
 
 ## Production safety rules
@@ -53,6 +53,11 @@
 - Test only with controlled, authorized endpoints. Never call the sample TEST CO records.
 - Preserve opt-outs across every future import, retry and campaign.
 - Do not enable outbound broadcasting until the app, carrier, import format, call flow and compliance controls are verified.
+
+## Review status
+
+- A draft pull request was opened: https://github.com/ravaunrichards/Lead-King-Phone-Broadcast/pull/1
+- The draft PR targets main. It has not been merged. No changes have been made to main.
 
 ## Next technical dependency
 
