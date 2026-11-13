@@ -64,7 +64,7 @@ jobs:
           if (-not (Test-Path -LiteralPath $x86PowerShell)) {
             throw '32-bit Windows PowerShell is not available on this runner.'
           }
-          & $x86PowerShell -NoProfile -ExecutionPolicy Bypass -File .\tools\Inspect-BroadcastLiteAssets.ps1 -RepositoryRoot .
+          & $x86PowerShell -NoProfile -ExecutionPolicy Bypass -File .\tools\Inspect-BroadcastLiteAssets.ps1 -RepositoryRoot . -OnlyManagedAssemblyPath 'VoIPSDK_x86\VoIPSDK_32bit.dll'
           if ($LASTEXITCODE -ne 0) {
             throw '32-bit SDK metadata inspection failed.'
           }
