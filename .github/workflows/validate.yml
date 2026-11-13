@@ -53,6 +53,10 @@ jobs:
         shell: powershell
         run: .\tools\Inspect-BroadcastLiteAssets.ps1
 
+      - name: Inspect BroadcastLite product licensing IL without execution
+        shell: powershell
+        run: .\tools\Inspect-BroadcastLiteLicenseIL.ps1
+
       - name: Verify Ozeki SDK assembly identity and native architecture
         shell: powershell
         run: .\tools\Test-VoIPSDKPackage.ps1
