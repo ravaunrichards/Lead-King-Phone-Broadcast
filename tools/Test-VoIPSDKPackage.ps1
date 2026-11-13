@@ -62,6 +62,116 @@ function Get-PeMachine {
     }
 }
 
+function Get-ClrExecutionTarget {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+        $reader = New-Object System.IO.BinaryReader($stream)
+        if ($stream.Length -lt 64) {
+            return [pscustomobject]@{ IsManaged = $false; Flags = $null; Target = 'No CLR header' }
+        }
+
+        $stream.Position = 0
+        if ([System.Text.Encoding]::ASCII.GetString($reader.ReadBytes(2)) -ne 'MZ') {
+            return [pscustomobject]@{ IsManaged = $false; Flags = $null; Target = 'No CLR header' }
+        }
+
+        $stream.Position = 0x3C
+        $peOffset = [long]$reader.ReadUInt32()
+        if ($peOffset -gt ($stream.Length - 26)) {
+            throw "PE header offset is outside the file: $Path"
+        }
+
+        $stream.Position = $peOffset
+        if ([System.Text.Encoding]::ASCII.GetString($reader.ReadBytes(4)) -ne ('PE' + [char]0 + [char]0)) {
+            throw "PE signature is missing: $Path"
+        }
+
+        $null = $reader.ReadUInt16()
+        $sectionCount = $reader.ReadUInt16()
+        $null = $reader.ReadBytes(12)
+        $optionalHeaderSize = $reader.ReadUInt16()
+        $null = $reader.ReadUInt16()
+        $optionalStart = $peOffset + 24
+        $stream.Position = $optionalStart
+        $optionalMagic = $reader.ReadUInt16()
+
+        if ($optionalMagic -ne 0x010B -and $optionalMagic -ne 0x020B) {
+            return [pscustomobject]@{ IsManaged = $false; Flags = $null; Target = 'No CLR header' }
+        }
+
+        $numberOfDirectoriesOffset = if ($optionalMagic -eq 0x010B) { 92 } else { 108 }
+        $directoriesStart = if ($optionalMagic -eq 0x010B) { 96 } else { 112 }
+        if ($optionalHeaderSize -lt ($directoriesStart + (15 * 8))) {
+            return [pscustomobject]@{ IsManaged = $false; Flags = $null; Target = 'No CLR header' }
+        }
+
+        $stream.Position = $optionalStart + $numberOfDirectoriesOffset
+        $numberOfDirectories = $reader.ReadUInt32()
+        if ($numberOfDirectories -le 14) {
+            return [pscustomobject]@{ IsManaged = $false; Flags = $null; Target = 'No CLR header' }
+        }
+
+        $stream.Position = $optionalStart + $directoriesStart + (14 * 8)
+        $cliRva = [long]$reader.ReadUInt32()
+        $cliSize = $reader.ReadUInt32()
+        if ($cliRva -eq 0 -or $cliSize -lt 20) {
+            return [pscustomobject]@{ IsManaged = $false; Flags = $null; Target = 'No CLR header' }
+        }
+
+        $sectionHeaders = $optionalStart + $optionalHeaderSize
+        $cliFileOffset = $null
+        for ($i = 0; $i -lt $sectionCount; $i++) {
+            $stream.Position = $sectionHeaders + ($i * 40)
+            $null = $reader.ReadBytes(8)
+            $virtualSize = [long]$reader.ReadUInt32()
+            $virtualAddress = [long]$reader.ReadUInt32()
+            $rawSize = [long]$reader.ReadUInt32()
+            $rawPointer = [long]$reader.ReadUInt32()
+            $null = $reader.ReadBytes(16)
+
+            $mappedSize = [Math]::Max($virtualSize, $rawSize)
+            if ($cliRva -ge $virtualAddress -and $cliRva -lt ($virtualAddress + $mappedSize)) {
+                $cliFileOffset = $rawPointer + ($cliRva - $virtualAddress)
+                break
+            }
+        }
+
+        if ($null -eq $cliFileOffset -or $cliFileOffset + 20 -gt $stream.Length) {
+            return [pscustomobject]@{ IsManaged = $false; Flags = $null; Target = 'CLR header RVA could not be mapped' }
+        }
+
+        $stream.Position = $cliFileOffset + 16
+        $flags = [uint32]$reader.ReadUInt32()
+        $ilOnly = (($flags -band 0x00000001) -ne 0)
+        $requires32Bit = (($flags -band 0x00000002) -ne 0)
+        $prefers32Bit = (($flags -band 0x00020000) -ne 0)
+
+        if (-not $ilOnly) {
+            $target = 'Mixed-mode or native CLR image'
+        }
+        elseif ($requires32Bit) {
+            $target = 'IL-only, 32-bit required'
+        }
+        elseif ($prefers32Bit) {
+            $target = 'IL-only, prefers 32-bit'
+        }
+        else {
+            $target = 'IL-only, AnyCPU-compatible'
+        }
+
+        return [pscustomobject]@{
+            IsManaged = $true
+            Flags = ('0x{0:X8}' -f $flags)
+            Target = $target
+        }
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
 function Assert-IdentityMatch {
     param(
         [Parameter(Mandatory = $true)]$Expected,
@@ -119,6 +229,20 @@ $x64Managed = Get-AssemblyIdentity -Path $x64ManagedPath
 Assert-IdentityMatch -Expected $expected -Actual $x86Managed -Label 'x86 managed wrapper'
 Assert-IdentityMatch -Expected $expected -Actual $x64Managed -Label 'x64 managed wrapper'
 
+$appClr = Get-ClrExecutionTarget -Path $appPath
+$x86ManagedClr = Get-ClrExecutionTarget -Path $x86ManagedPath
+$x64ManagedClr = Get-ClrExecutionTarget -Path $x64ManagedPath
+
+if ($appClr.Target -ne 'IL-only, 32-bit required') {
+    throw "BroadcastLite.exe execution target changed unexpectedly: $($appClr.Target)"
+}
+if ($x86ManagedClr.Target -ne 'IL-only, AnyCPU-compatible') {
+    throw "The x86-folder managed wrapper has an unexpected CLR target: $($x86ManagedClr.Target)"
+}
+if ($x64ManagedClr.Target -ne 'IL-only, AnyCPU-compatible') {
+    throw "The x64-folder managed wrapper has an unexpected CLR target: $($x64ManagedClr.Target)"
+}
+
 $x86Machine = Get-PeMachine -Path $x86NativePath
 $x64Machine = Get-PeMachine -Path $x64NativePath
 if ($x86Machine -ne 'x86') {
@@ -129,10 +253,14 @@ if ($x64Machine -ne 'x64') {
 }
 
 Write-Host ("PASS: BroadcastLite requires {0}, Version={1}, PublicKeyToken={2}" -f $expected.Name, $expected.Version, $expected.PublicKeyToken)
+Write-Host ("PASS: BroadcastLite CLR target: {0} ({1})" -f $appClr.Target, $appClr.Flags)
+Write-Host ("PASS: x86 managed wrapper CLR target: {0} ({1})" -f $x86ManagedClr.Target, $x86ManagedClr.Flags)
+Write-Host ("PASS: x64 managed wrapper CLR target: {0} ({1})" -f $x64ManagedClr.Target, $x64ManagedClr.Flags)
 Write-Host ("PASS: x86 managed wrapper identity matches: {0}, Version={1}" -f $x86Managed.Name, $x86Managed.Version)
 Write-Host ("PASS: x64 managed wrapper identity matches: {0}, Version={1}" -f $x64Managed.Name, $x64Managed.Version)
 Write-Host ("PASS: x86 native library machine type: {0}" -f $x86Machine)
 Write-Host ("PASS: x64 native library machine type: {0}" -f $x64Machine)
+Write-Host 'PASS: the 32-bit BroadcastLite process must use the x86 native SDK library.'
 
 if (Test-Path -LiteralPath $rootManagedPath -PathType Leaf) {
     try {
