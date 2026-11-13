@@ -280,6 +280,13 @@ $binaryPaths = @(
     'VoIPSDK_x86\lame_enc_32.dll',
     'VoIPSDK_x86\vcomp100_x86.dll'
 )
+ 
+if (-not [string]::IsNullOrWhiteSpace($OnlyManagedAssemblyPath)) {
+    if ($OnlyManagedAssemblyPath -notin $binaryPaths) {
+        throw 'OnlyManagedAssemblyPath must match one of the known repository SDK/executable inspection paths.'
+    }
+    $binaryPaths = @($OnlyManagedAssemblyPath)
+}
 
 $binaryResults = foreach ($relative in $binaryPaths) {
     $full = Join-Path $root $relative
@@ -342,13 +349,6 @@ $binaryDetailResults = foreach ($relative in $binaryPaths) {
         PublicKeyToken = $assembly.PublicKeyToken
         AssemblyReferences = $assembly.References
     }
-}
-
-if (-not [string]::IsNullOrWhiteSpace($OnlyManagedAssemblyPath)) {
-    if ($OnlyManagedAssemblyPath -notin $binaryPaths) {
-        throw 'OnlyManagedAssemblyPath must match one of the known repository SDK/executable inspection paths.'
-    }
-    $binaryPaths = @($OnlyManagedAssemblyPath)
 }
 
 $audioCandidates = @(
